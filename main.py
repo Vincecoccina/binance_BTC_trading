@@ -18,9 +18,6 @@ secret_key = os.getenv("SECRET_KEY_TEST")
 # Initialisation de l'API Binance avec les clés API
 client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=False)
 
-
-# Réorganisation du code
-
 class Trader():
     def __init__(self, symbol, bar_length, stop_loss, target_profit, change):
         self.symbol = symbol
@@ -71,20 +68,20 @@ class Trader():
                 if row["Chg_12"] > self.change:
                     buyprice = row.buyprice
                     in_position = True
-                    self.data.at[index, "Signal"] = 1  # Mettre à jour le signal pour cette ligne
+                    self.data.at[index, "Signal"] = 1
             if in_position:
                 if row.High >= buyprice * self.target_profit:
                     sellprice = buyprice * self.target_profit
                     profit = (sellprice - buyprice) / buyprice
                     profits.append(profit)
                     in_position = False
-                    self.data.at[index, "Signal"] = -1  # Mettre à jour le signal pour cette ligne
+                    self.data.at[index, "Signal"] = -1
                 elif row.Low <= buyprice * self.stop_loss:
                     sellprice = buyprice * self.stop_loss
                     profit = (sellprice - buyprice) / buyprice
                     profits.append(profit)
                     in_position = False
-                    self.data.at[index, "Signal"] = -1  # Mettre à jour le signal pour cette ligne
+                    self.data.at[index, "Signal"] = -1
 
         return ((pd.Series(profits) + 1).prod() - 1)
     
