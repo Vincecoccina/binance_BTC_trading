@@ -17,10 +17,10 @@ class Trader():
         self.symbol = symbol
         self.bar_length = bar_length
         self.available_intervals = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]
-        self.position = 0
         self.stop_loss = stop_loss
         self.target_profit = target_profit
         self.change = change
+        self.last_processed = None
     
     def start_trading(self):
 
@@ -87,9 +87,8 @@ class Trader():
         low     = float(msg["k"]["l"])
         close   = float(msg["k"]["c"])
         volume  = float(msg["k"]["v"])
-        complete=       msg["k"]["x"]
         print("Time: {} | Price: {}".format(event_time, close))
-        new_data = pd.DataFrame({
+        new_row = pd.DataFrame({
         "Open": [first],
         "High": [high],
         "Low": [low],
@@ -97,23 +96,27 @@ class Trader():
         "Volume": [volume],
         }, index=[start_time])
 
-        # Concaténer avec les données existantes
-        self.data = pd.concat([self.data, new_data])
-        # Recalcule des indicateurs
-        self.calculate_indicators()
+        new_data = pd.DataFrame(new_row, index=[pd.to_datetime(msg["k"]["t"], unit="ms")])
+        self.process_new_data(new_data)
     
-    def execute_trades(self):
-        for index, row in self.data.iterrows():
-            signal = row["Signal"]
-
+    def process_new_data(self, new_data):
+        self.data = pd.concat([self.data, new_data])
+        self.calculate_indicators()
+        self.execute_trades(new_data)
+    
+    def execute_trades(self, new_data):
+        for index, row in new_data.iterrows():
+            if self.last_processed is not None and index <= self.last_processed:
+                continue
+            signal = row.get("Signal", 0)
             try:
                 if signal == 1:
-                    print(f"Achat effectué")
+                    print(f"Achat effectué à {index}")
                 elif signal == -1:
-                    print(f"Vente effectuée")
-
-            except BinanceAPIException as e:
-                print(f"Erreur lors de l'envoi de l'ordre de trade à {index}: {e}")
+                    print(f"Vente effectuée à {index}")
+            except Exception as e:
+                print(f"Erreur: {e}")
+            self.last_processed = index
 
 
 if __name__ == "__main__": # Lance le script seulement si main.py est appelé
