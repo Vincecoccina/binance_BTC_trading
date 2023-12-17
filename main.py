@@ -10,13 +10,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import time
 
-# Chargement des variables d'environnement pour la sécurité des clés API
 load_dotenv()
-api_key = os.getenv("API_KEY_TEST")
-secret_key = os.getenv("SECRET_KEY_TEST")
-
-# Initialisation de l'API Binance avec les clés API
-client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=False)
 
 class Trader():
     def __init__(self, symbol, bar_length, stop_loss, target_profit, change):
@@ -120,22 +114,37 @@ class Trader():
 
             except BinanceAPIException as e:
                 print(f"Erreur lors de l'envoi de l'ordre de trade à {index}: {e}")
+
+
+if __name__ == "__main__": # Lance le script seulement si main.py est appelé
+
+    # Initialisation de l'API Binance avec les clés API
+    api_key = os.getenv("API_KEY_TEST")
+    secret_key = os.getenv("SECRET_KEY_TEST")
+
+    # Création du Client Binance
+    client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=False)
     
+    # Variables de trading
+    bar_length = "1h"
+    symbol="BTCUSDT"
+    change = 0.02
+    target_profit = 1.01
+    stop_loss = 0.99 
 
-bar_length = "1h"
-symbol="BTCUSDT"
-change = 0.02
-target_profit = 1.01
-stop_loss = 0.99 
-trader = Trader(symbol=symbol, bar_length=bar_length, stop_loss=stop_loss, target_profit=target_profit, change=change)
-trader.start_trading()
+    # Instance de la class Trader
+    trader = Trader(symbol=symbol, bar_length=bar_length, stop_loss=stop_loss, target_profit=target_profit, change=change)
 
-run_time = 60  # Durée d'exécution en secondes
-time.sleep(run_time)
+    # Lance le script
+    trader.start_trading()
 
-# Arrêt du WebSocket
-trader.twm.stop()
+    run_time = 60  # Durée d'exécution en secondes
+    time.sleep(run_time)
 
-filtered_data = trader.data[trader.data["Signal"]!=0]
-print(filtered_data)
+    # Arrêt du WebSocket
+    trader.twm.stop()
+
+    filtered_data = trader.data[trader.data["Signal"]!=0]
+    print(filtered_data)
+
 
