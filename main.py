@@ -20,7 +20,8 @@ class Trader():
         self.target_profit = target_profit
         self.change = change
         self.units = units
-        self.trades = pd.DataFrame(columns=['Time',"Symbol", 'Type', 'OrderID', 'Price', 'Quantity','Total', 'Status'])
+        self.trades = pd.DataFrame(columns=['Date',"Symbol", 'Type', 'OrderID', 'Price', 'Quantity','Total', 'Status'])
+        
     
     def start_trading(self):
 
@@ -52,16 +53,18 @@ class Trader():
     
     def calc_prof(self):
         in_position = False
+        buyprice = None
         profits = []
         self.data["Signal"] = 0
 
         for index, row in self.data.iterrows():
-            if not in_position:
-                if row["Chg_12"] > self.change:
-                    buyprice = row.buyprice
-                    in_position = True
-                    self.data.at[index, "Signal"] = 1
-            if in_position:
+            # Vérifier si on doit acheter
+            if not in_position and row["Chg_12"] > self.change:
+                buyprice = row.buyprice
+                in_position = True
+                self.data.at[index, "Signal"] = 1
+            # Vérifier si on doit vendre
+            elif in_position:
                 if row.High >= buyprice * self.target_profit:
                     sellprice = buyprice * self.target_profit
                     profit = (sellprice - buyprice) / buyprice
@@ -76,6 +79,7 @@ class Trader():
                     self.data.at[index, "Signal"] = -1
 
         return ((pd.Series(profits) + 1).prod() - 1)
+
     
     
     def execute_trades(self):
@@ -86,11 +90,11 @@ class Trader():
         try:
             if signal == 1:
                 order = client.create_order(symbol=self.symbol, side="BUY", type="MARKET", quantity=self.units)
-                print(f"Vente effectuée à : ", order)
+                print(f"Achat effectué : ", order)
                 self.record_trade(order, 'BUY')
             elif signal == -1:
                 order = client.create_order(symbol=self.symbol, side="SELL", type="MARKET", quantity=self.units)
-                print(f"Vente effectuée à : ", order)
+                print(f"Vente effectuée : ", order)
                 self.record_trade(order, 'SELL')
             else:
                 print(f"neutre")
@@ -98,20 +102,22 @@ class Trader():
                 print(f"Erreur: {e}")
 
 
-    def record_trade(self, order, type, time):
+    def record_trade(self, order, type):
         price = float(order['fills'][0]['price'])
         quantity = float(order['fills'][0]['qty'])
-        new_trade = {
-            'Time': time,
-            "Symbol": symbol,
+        time = order['transactTime']
+        new_trade = pd.DataFrame({
+            "Date": time,
             'Type': type,
+            "Symbol": symbol,
             'OrderID': order['orderId'],
             'Price': price,
             'Quantity': quantity,
             'Total': price * quantity,
             'Status': order['status']
-        }
-        self.trades = self.trades._append(new_trade, ignore_index=True)
+        }, index=[order["orderId"]])
+        new_trade["Date"] = pd.to_datetime(new_trade.iloc[:,0], unit = "ms")
+        self.trades = pd.concat([self.trades, new_trade])
 
 
 if __name__ == "__main__": # Lance le script seulement si main.py est appelé
@@ -121,25 +127,35 @@ if __name__ == "__main__": # Lance le script seulement si main.py est appelé
     secret_key = os.getenv("SECRET_KEY_TEST")
 
     # Création du Client Binance
-    client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=False)
+    client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=True)
+    account_info = client.get_account()
+    btc_price = float(client.get_symbol_ticker(symbol="BTCUSDT")['price'])
+    balances = account_info['balances']
+    for balance in balances:
+        if balance['asset'] == 'USDT':
+            usdt_balance = float(balance['free'])
+            print("Solde en USDT : ", usdt_balance)
     
     # Variables de trading
     bar_length = "1h"
     symbol = "BTCUSDT"
-    units = 0.0004
+    capital = usdt_balance
+    price = btc_price
+    pourcentage_risque_par_trade = 0.01
+    montant_risque = capital * pourcentage_risque_par_trade
+    precision = 5
+    unit = montant_risque / btc_price
+    units = round(unit, precision)
     change = 0.02
-    target_profit = 1.01
-    stop_loss = 0.99
+    target_profit = 1.05
+    stop_loss = 0.97
 
     # Instance de la class Trader
     trader = Trader(symbol=symbol, bar_length=bar_length, stop_loss=stop_loss, target_profit=target_profit, change=change, units=units)
-    first_run = True
+
+ 
     try:
         while True:
-            if first_run:
-                trader.start_trading()
-                first_run = False
-
             current_time = datetime.utcnow()
             next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
             sleep_time = (next_hour - current_time).total_seconds()
@@ -147,9 +163,10 @@ if __name__ == "__main__": # Lance le script seulement si main.py est appelé
             trader.start_trading()
     except KeyboardInterrupt:
         print("Arrêt du script...")
-
-    filtered_data = trader.data[trader.data["Signal"]!=0]
-    print(filtered_data)
-    print(trader.trades[50:])
-
+        profit = trader.calc_prof()
+        print("Profit calculé :", profit)
+        filtered_data = trader.data[trader.data["Signal"]!=0]
+        print(filtered_data[:])
+        print(trader.trades)
+   
 
