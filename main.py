@@ -46,7 +46,7 @@ class Trader():
     
     def calculate_indicators(self):
         self.data["Chg"] = self.data.Close.pct_change() + 1
-        self.data["Chg_12"] = self.data.Chg.rolling(12).sum()
+        self.data["Chg_12"] = self.data.Chg.rolling(12).mean()
         self.data["buyprice"] = self.data.Open.shift(-1)
         self.data.dropna(inplace=True)
         self.calc_prof()
@@ -128,6 +128,7 @@ if __name__ == "__main__": # Lance le script seulement si main.py est appelé
 
     # Création du Client Binance
     client = Client(api_key=api_key, api_secret=secret_key, tld='com', testnet=True)
+    
     account_info = client.get_account()
     btc_price = float(client.get_symbol_ticker(symbol="BTCUSDT")['price'])
     balances = account_info['balances']
@@ -146,16 +147,19 @@ if __name__ == "__main__": # Lance le script seulement si main.py est appelé
     precision = 5
     unit = montant_risque / btc_price
     units = round(unit, precision)
-    change = 0.02
-    target_profit = 1.05
-    stop_loss = 0.97
+    change = 0.9
+    target_profit = 1.01
+    stop_loss = 0.99
 
     # Instance de la class Trader
     trader = Trader(symbol=symbol, bar_length=bar_length, stop_loss=stop_loss, target_profit=target_profit, change=change, units=units)
-
- 
+    first_run = True
     try:
         while True:
+            if first_run:
+                trader.start_trading()
+                first_run = False
+                
             current_time = datetime.utcnow()
             next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
             sleep_time = (next_hour - current_time).total_seconds()
@@ -166,7 +170,7 @@ if __name__ == "__main__": # Lance le script seulement si main.py est appelé
         profit = trader.calc_prof()
         print("Profit calculé :", profit)
         filtered_data = trader.data[trader.data["Signal"]!=0]
-        print(filtered_data[:])
+        print(filtered_data)
         print(trader.trades)
    
 
